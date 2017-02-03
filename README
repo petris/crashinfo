@@ -1,0 +1,14 @@
+Description
+===========
+Crashinfo is an utility designed to collect information about a crashing
+process. These information are collected from /proc and from the core file,
+which is read from the standard input, which makes crashinfo suitable for
+being installed in /proc/sys/kernel/core_pattern.
+
+Installation
+============
+Adapt "Configuration" section of Makefile (or pass related options trough
+environment variables) and run the usual:
+  make
+  make install
+which install the "coreinfo" binary.
