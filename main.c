@@ -20,9 +20,11 @@
  */
 
 #define _GNU_SOURCE
+#include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -53,9 +55,9 @@ static void handler(int sig)
 	_exit(2);
 }
 
-/** Catch signals, which default action is to dump the core. This should
- *  prevent infinite loop */
-static void disable_core_sig(void)
+/** Set core limit to zero and catch signals, which default action is
+ * to dump the core. This should prevent an infinite loop. */
+static void disable_core_generation(void)
 {
 	static char stack[MINSIGSTKSZ];
 	const stack_t ss = { .ss_size = MINSIGSTKSZ, .ss_sp = stack };
@@ -66,6 +68,12 @@ static void disable_core_sig(void)
 		};
 	int i;
 
+	// Different kernel versions interprets this a different way,
+	// but in all cases it's inherited by our children.
+	setrlimit(RLIMIT_CORE, 0);
+
+	// In a case kernel ignores RLIMIT_CORE, we must catch core generating
+	// signals. This doesn't protect programs we exec().
 	if (sigaltstack(&ss, NULL)) {
 		log_warn("Can't configure alternative stack: %s", strerror(errno));
 		act.sa_flags = 0;
@@ -115,7 +123,8 @@ static int intlen(unsigned i)
 	return i < 10 ? 1 : 1 + intlen(i / 10);
 }
 
-static int spawn_proc(const char *cmd, int infd, int outfd, const char *last_arg)
+static int spawn_proc(const char *cmd, int infd, int outfd,
+		const char *arg1, const char *arg2)
 {
 	int pid = fork();
 
@@ -124,26 +133,32 @@ static int spawn_proc(const char *cmd, int infd, int outfd, const char *last_arg
 				cmd, strerror(errno));
 		return -1;
 	} else if (pid == 0) {
-		char *argv[32];
 		char *exe = strdup(cmd);
+		char *argv[32];
 		int i;
 
 		if (!exe) exe = (char*)cmd;
 
-		log_dbg("Starting program '%s%s%s'", cmd, last_arg ? " " : "",
-				last_arg ?: "");
+		log_dbg("Starting program '%s'", cmd);
 
 		dup2(infd, 0);
 		dup2(outfd, 1);
 
 		argv[0] = strtok(exe, delim);
-		for (i = 1; i < ARRAY_SIZE(argv) - 2; i++) {
+		for (i = 1; i < ARRAY_SIZE(argv) - 1; i++) {
 			argv[i] = strtok(NULL, delim);
+			// execvp must behave as if the const char *const[]
+			// argument is used, but the prototype differs due to
+			// historical reasons
+			if (arg1 && strcmp(argv[i], "@1")) {
+				argv[i] = (char*)arg1;
+			} else if (arg2 && strcmp(argv[i], "@2")) {
+				argv[i] = (char*)arg2;
+			}
 		}
-		argv[i] = last_arg ? strdup(last_arg) : NULL;
-		argv[i + 1] = NULL;
+		argv[i] = NULL;
 
-		execv(argv[0], argv);
+		execvp(argv[0], argv);
 		log_crit("Starting executable '%s' failed: %s", exe, strerror(errno));
 		exit(1);
 	}
@@ -197,9 +212,9 @@ static void close_output(const struct conf_output_s *c, struct run_output_s *r)
 		free(iter);
 	}
 
-	for (str = c->notify; str; str = str->next) {
+	if (r->output_filename) for (str = c->notify; str; str = str->next) {
 		int nullfd = open("/dev/null", O_RDWR | O_CLOEXEC);
-		spawn_proc(str->str, nullfd, nullfd, r->output_filename);
+		spawn_proc(str->str, nullfd, nullfd, r->output_filename, NULL);
 	}
 }
 
@@ -241,16 +256,19 @@ restart:
 	strftime(path, sizeof path, c->output, &run.start_tm);
 	seq_len = c->exists_seq > 0 ? intlen(c->exists_seq - 1) : intlen(counter);
 
-	for (i = strlen(path), j = sizeof path - 1;
-	     i >= 1; i--, j--) {
+	for (i = strlen(path), j = sizeof path - 1; i >= 1; i--, j--) {
+		const char *p;
+
 		if (!is_escape(path, i - 1)) {
 			path[j] = path[i];
 		} else switch (path[i]) {
-			case 'C': // Counter mark
+			case ESC:
+				path[j] = path[i--];
+				break;
+			case 'Q': // Counter mark
 				j -= seq_len;
 				if (j < --i) {
-					log_crit("Expanded output filename '%s' is too long", c->output);
-					goto err0;
+					goto too_long;
 				}
 				snprintf(buf, sizeof buf, "%0*d", seq_len, counter);
 				memcpy(&path[j], buf, seq_len);
@@ -258,11 +276,26 @@ restart:
 					log_info("Sequence wild card in '%s', but sequence mode is not used", c->output);
 				}
 				break;
-			case ESC:
-				path[j] = path[i--];
-				break;
 			case 'e': // executable filename
 			case 'E': // pathname of executable, / replaced by !
+				for (p = conf.proc.exe + strlen(conf.proc.exe) - 1;
+				     p >= conf.proc.exe; p--, j--) {
+					if (j <= i) {
+						goto too_long;
+					}
+
+					if (*p == '/') {
+						if (path[i] == 'e') {
+							break;
+						} else {
+							path[j] = '!';
+						}
+					} else {
+						path[j] = *p;
+					}
+				}
+				i--; j++;
+				break;
 			default:
 				log_info("Unknown wild card '@%c' in '%s'", path[i], c->output);
 				path[j--] = path[i--];
@@ -281,7 +314,7 @@ restart:
 		case CONF_EXISTS_OVERWRITE:
 			flags = O_WRONLY | O_TRUNC | O_CREAT | O_CLOEXEC;
 			break;
-		case CONF_EXISTS_IGNORE:
+		case CONF_EXISTS_KEEP:
 		case CONF_EXISTS_SEQUENCE:
 			flags = O_WRONLY | O_EXCL | O_CREAT | O_CLOEXEC;
 			break;
@@ -292,7 +325,7 @@ restart:
 
 reopen: fd = open(&path[j], flags, 0600);
 	if (fd < 0) {
-		if (errno == EEXIST && c->exists == CONF_EXISTS_IGNORE) {
+		if (errno == EEXIST && c->exists == CONF_EXISTS_KEEP) {
 			log_notice("File '%s' already exists, ignoring the output");
 			fd = open("/dev/null", O_WRONLY | O_CLOEXEC);
 			if (fd < 0) {
@@ -360,7 +393,7 @@ reopen: fd = open(&path[j], flags, 0600);
 		}
 		(*prev_f)->next = NULL;
 
-		pid = spawn_proc(filter->str, infd, outfd, NULL);
+		pid = spawn_proc(filter->str, infd, outfd, NULL, NULL);
 		if (pid < 0) {
 			free(*prev_f);
 			*prev_f = NULL;
@@ -374,6 +407,10 @@ reopen: fd = open(&path[j], flags, 0600);
 	}
 
 	return 0;
+
+too_long:
+	log_crit("Expanded output filename '%s' is too long", c->output);
+	goto err0;
 
 err1:	while (r->filter) {
 		struct run_multi_filter_s *tmp = r->filter;
@@ -450,12 +487,13 @@ repeat: rtn = write(fd, (const char*)buf + size, count - size);
 int main(int argc, char *argv[])
 {
 	static char buf[32*1024];
+	struct conf_multi_str_s *str;
 	int buf_read = 0, buf_write = 0;
 	int info_pipe[2] = { -1, -1 };
 	pthread_t tid;
 	int c, rtn;
 
-	disable_core_sig();
+	disable_core_generation();
 
 	openlog("crash-info", LOG_PID | LOG_NDELAY, LOG_DAEMON);
 
@@ -475,6 +513,7 @@ int main(int argc, char *argv[])
 				}
 				break;
 			case 'h':
+				printf("Usage: %s [-h] [-c config_file] [-o option=value]\n", argv[0]);
 				return 0;
 			case '?':
 				fprintf(stderr, "Unknown option, use %s -h for help\n", argv[0]);
@@ -612,6 +651,15 @@ int main(int argc, char *argv[])
 
 	close_output(&conf.core, &run.core);
 	close_output(&conf.info, &run.info);
+
+	if (run.info.output_filename && run.core.output_filename) {
+		for (str = conf.info_core_notify; str; str = str->next) {
+			int nullfd = open("/dev/null", O_RDWR | O_CLOEXEC);
+			spawn_proc(str->str, nullfd, nullfd,
+					run.info.output_filename,
+					run.core.output_filename);
+		}
+	}
 
 	return 0;
 }

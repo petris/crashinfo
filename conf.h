@@ -34,7 +34,7 @@ enum conf_exists_e {
 	CONF_EXISTS_DEFAULT = 0,
 	CONF_EXISTS_APPEND,
 	CONF_EXISTS_OVERWRITE,
-	CONF_EXISTS_IGNORE,
+	CONF_EXISTS_KEEP,
 	CONF_EXISTS_SEQUENCE,
 };
 
@@ -86,6 +86,8 @@ struct conf_s {
 	struct conf_output_s core;
 	/** Buffer for backwards seeks, unwinder argument. */
 	int core_buffer_size;
+	/** Notify with both info and core streams as arguments */
+	struct conf_multi_str_s *info_core_notify;
 	/** Logging configuration. */
 	struct {
 		/** Log level threshold for info output. */

@@ -1,0 +1,277 @@
+.TH CRASHINFO 1 2017-02-06
+
+.de VB \" Begin verbatim text
+.ft CW
+.nf
+.ne \\$1
+..
+.de VE \" End verbatim text
+.ft R
+.fi
+..
+
+.SH NAME
+crashinfo \- Save information from a core and \fI/proc/<PID>\fR directory
+
+.SH SYNOPSIS
+.B crashinfo
+[\fB\-c\fR \fIconfig_file\fR]
+[\fB\-o\fR \fIconfig_directive\fR]
+[\fB\-h\fR]
+
+.SH DESCRIPTION
+.B crashinfo
+reads core file from standard input and generates two streams \- \fBcore\fR
+stream containing the same data which were read and \fBinfo\fR stream in
+.SM YAML
+format containing information extracted from the core and the matching
+\fI/proc/<PID>\fR directory. This makes it suitable for installation in
+\fI/proc/sys/kernel/core_pattern\fR, see
+.BR core (5)
+for more details.
+
+
+.SS Options
+.TP
+.BR \-c " " \fI config_file\fR
+Read configuration from \fIconfig_file\fR. The option can be specified multiple
+times, then all listed files are read. Configuration file contains one
+configuration directive per line, empty lines and lines whose first non-blank
+character is \fI#\fR, are ignored.
+.TP
+.BR \-o " " \fI config_directive\fR
+Directly specify a configuration directive.
+.TP
+.BR \-h " "
+Print a usage message.
+
+.SS Configuration directives
+Configuration directive has a form
+.ce 1
+\fBoption\fR = \fIvalue\fR
+and both leading and trailing white spaces around \fBoption\fR and \fIvalue\fR
+are ignored. The \fBoption\fR is one of the options listed later in this section
+and the \fIvalue\fR is a value assigned to that option. Value domain differs
+based on the \fBoption\fR and can be one of the following:
+.TP
+.BR <ENUM>
+Value is one of designated words. These words are lister at their appropriate
+option.
+.TP
+.BR <INTEGER>
+Value is a non-negative integer.
+.TP
+.BR <STRING>
+Value is an arbitrary string.
+.TP
+.BR <BOOL>
+Value is ether \fI1\fR meaning on, enabled, true or \fI0\fR meaning off,
+disabled, false.
+.PP
+If it's a meaningful operation to set an option to no value, \fI~\fR (tilde)
+symbol can be used for that purpose.
+.PP
+If the domain is followed by \fI+\fR (plus sign), it means the option can take
+multiple values and specifying it several times adds values to this option.
+Otherwise the last specified value is used. In a case of a multi value option,
+\fI~\fR removes all assigned values.
+
+The following configuration options are available for controlling \fBinfo\fR and
+\fBcore\fR output streams:
+.TP
+\fBinfo_output, core_output\fR: \fI<STRING>\fR
+Output filename. The filename can contain the same conversion characters which
+are supported by
+.BR strftime (3)
+function plus additional conversations, which expands as follows:
+.RS
+.IP \fI@e\fR
+executable filename.
+.IP \fI@E\fR
+pathname of executable, with \fI/\fR (slash) replaced by \fI!\fR (exclamation
+mark).
+.IP \fI@Q\fR
+sequence number (used by \fB<stream>_exists\fR = \fIsequence\fR).
+.RE
+
+.TP
+\fBinfo_exists, core_exists\fR: \fI<ENUM>\fR
+How to react if the output already exists. The value can be one of the
+following:
+.RS
+.IP \fIappend\fR
+Append the newly written data to the end of the existing file.
+.IP \fIoverwrite\fR
+Overwrite the existing file.
+.IP \fIsequence\fR
+Create a sequence of files replacing \fI@Q\fR with an incrementing number
+between 0 and \fB<stream>_exists_seq\fR. The number width is always the same,
+so if the maximum is set to 100, \fI@Q\fR is replaced by 000, 001 ... 099,
+100.
+.IP \fIkeep\fR
+Keep the original file and terminate the stream do \fI/dev/null\fR instead.
+.RE
+
+.TP
+\fBinfo_exists_seq, core_exists_seq\fR: \fI<INTEGER>\fR
+The maximum value used for the sequence number when \fBinfo_exists\fR or
+\fBcore_exists\fR are set to \fIsequence\fR.
+
+.TP
+\fBinfo_filter, core_filter\fR: \fI<STRING>+\fR
+Stream is filtered trough pipe composed from all instances of this
+configuration option. Assume the following configuration snippet:
+.RS
+.RS 4
+.VB
+info_filter = /bin/head -c 65536
+info_filter = /usr/bin/xz
+info_output = /tmp/crash.log.xz
+.VE
+.RE
+.RE
+would have the similar effect as the output would be send to the following shell
+pipe:
+.ce 1
+/bin/head -c 65536 | /usr/bin/xz > /tmp/crash.log.xz
+except that a shell is not used for that (handy for embedded).
+
+.TP
+\fBinfo_mkdir, core_mkdir\fR: \fI<BOOL>\fR
+If true, the leading path will be created if it doesn't exist.
+
+.TP
+\fBinfo_notify, core_notify\fR: \fI<STRING>+\fR
+Commands executed after the stream is finalized. All isolated occurrences of
+\fI@1\fR are replaced with the output filename. Example:
+.RS
+.RS 4
+.VB
+info_notify = mail -s Crash -a @1 root
+info_notify = mail -s Crash -a@1 root
+.VE
+.RE
+.RE
+The first line will send an email to root with the info output attached to it,
+whereas the second one will fail trying to attach '@1' (assuming a file with
+that name doesn't exist).
+
+.TP
+\fBinfo_core_notify\fR: \fI<STRING>+\fR
+Commands executed after both streams are finalized. All isolated occurrences of
+\fI@1\fR are replaced with the \fBinfo\fR output filename and occurrences of
+\fI@2\fR are replaced with the \fBcore\fR output filename. Both streams outputs
+must be specified (not \fI~\fR) and successfully opened, otherwise this
+option is not evaluated.
+
+.PP
+Core interpreting options:
+.TP
+\fBcore_buffer_size\fR: \fI<INTEGER>\fR
+Sets the unwinder buffer size to this value. Unwinder buffer is used to resolve
+references, which point backward in the core. This is necessary when core is
+read from a source, which doesn't support seeking (e.g. a pipe).
+
+.PP
+Options related to \fI/proc\fR:
+.TP
+\fBproc_ignore\fR: \fI<BOOL>\fR
+If enabled, no information is read from \fI/proc\fR file system.
+
+.TP
+\fBproc_path\fR: \fI<STRING>\fR
+Path to the \fI/proc/<PID>\fR directory used for reading process information.
+If this value is not specified, \fIPID\fR is read from the core and matching
+directory is opened.
+
+.TP
+\fBproc_exe\fR: \fI<STRING>\fR
+Matching executable name. If the value is not specified and \fI/proc\fR
+directory is available, information is obtained from there.
+
+.TP
+\fBproc_maps\fR: \fI<STRING>+\fR
+Process mappings. If the value is not specified and \fI/proc\fR directory
+is available, information is obtained from there.
+
+.TP
+\fBproc_dump_root\fR: \fI<STRING>+\fR
+Files dumped to the info stream from \fI/proc/<PID>\fR directory.
+
+.TP
+\fBproc_dump_task\fR: \fI<STRING>+\fR
+Files dumped to the info stream from \fI/proc/<PID>/task/<TID>\fR directory.
+
+.PP
+Logging options:
+.TP
+\fBlog_info, log_syslog, log_stderr\fR: \fI<ENUM>\fR
+Sets the threshold of messages send to \fIinfo\fR output stream, syslog or
+standard error output. The possible values are:
+.ce 1
+\fInone\fR, \fIemerg\fR, \fIalert\fR, \fIcrit\fR, \fIerr\fR, \fIwarning\fR, \fInotice\fR, \fIinfo\fR, \fIdebug\fR
+Note that \fIdebug\fR is not available unless the program was compiled with
+\fICRASHINFO_WITH_DEBUG\fR option.
+
+.SH RETURN VALUE
+0 on success.
+
+.SH EXAMPLES
+
+Compress, truncate and encrypt the core output:
+.RS 4
+.VB
+# Compress core file using pxz (Parallel XZ)
+core_filter = pxz
+# Limit core size to 8MB
+core_filter = head -c 8388608
+# Encrypt file using openssl
+core_filter = openssl smime -encrypt -aes256 -outform DER /etc/coreinfo/enc.pem
+# Write output to /var/run/crash/YYYY-MM-DD-PROG.core.xz.p7
+core_output = /var/run/crash/%Y-%m-%d-@e.core.xz.p7
+.VE
+.RE
+
+Keep the first three cores of every crashed executable:
+.RS 4
+.VB
+# Enable the sequence mode
+core_exists = sequence
+# Set the sequence maximum to 2 (0, 1, 2)
+core_exists_seq = 2
+# Create directories automatically
+core_mkdir = 1
+# Set the output to use crashed executable path as a directory
+core_output = /var/run/crash/@E/@Q.core
+.VE
+.RE
+
+Send crash info log by email without creating a temporary file:
+.RS 4
+.VB
+# Explicitly disable generating output file (the default)
+info_output = ~
+# Mail it instead to root
+info_filter = mail -S Crash root
+.VE
+.RE
+
+Send compressed core and crash info log by email:
+.RS 4
+.VB
+# Save both files to a temporary directory
+info_output = /tmp/@e.log.gz
+core_output = /tmp/@e.core.gz
+# Compress both outputs
+info_filter = gzip -9
+core_filter = gzip -9
+# Mail them to root
+info_core_notify = mail -S Crash -m @1 -m @2 root
+# Remove outputs
+info_core_notify = rm @1 @2
+.VE
+.RE
+
+.SH SEE ALSO
+.BR core (5),
+.BR strftime (3)

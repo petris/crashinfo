@@ -40,7 +40,7 @@ struct conf_s conf = {
 		.exists = CONF_EXISTS_APPEND,
 	},
 	.core = {
-		.exists = CONF_EXISTS_IGNORE,
+		.exists = CONF_EXISTS_KEEP,
 	},
 	.core_buffer_size = 4 * 1024 * 1024,
 	.log = {
@@ -88,7 +88,7 @@ static const struct parse_enum_s parse_enum_bool[] = {
 static const struct parse_enum_s parse_enum_exists[] = {
 	{ "append", CONF_EXISTS_APPEND },
 	{ "overwrite", CONF_EXISTS_OVERWRITE },
-	{ "ignore", CONF_EXISTS_IGNORE },
+	{ "keep", CONF_EXISTS_KEEP },
 	{ "sequence", CONF_EXISTS_SEQUENCE },
 	{}
 };
@@ -308,6 +308,8 @@ static const struct parse_keywords_s keywords[] = {
 	{ "core_notify",     &conf.core.notify, parse_string_multi },
 	{ "core_output",     &conf.core.output, parse_string },
 	{ "core_buffer_size",&conf.core_buffer_size, parse_int },
+
+	{ "info_core_notify",&conf.info_core_notify, parse_string_multi },
 
 	// Logging options
 	{ "log_info", &conf.log.info, parse_enum, parse_enum_loglevel },

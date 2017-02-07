@@ -18,6 +18,8 @@ DESTDIR ?= /
 # Build
 #
 
+TARGETS := crashinfo crashinfo.1.gz
+
 ifneq ($(CRASHINFO_WITH_DEBUG), 1)
   override CFLAGS += -DNDEBUG
 endif
@@ -28,14 +30,19 @@ endif
 
 .PHONY: all clean install
 
-all: crashinfo
+all: $(TARGETS)
 
 crashinfo: main.c log.c conf.c info.c proc.c unw.c util.c
 	$(CC) $(CFLAGS) -Wall $^ -o $@ -lrt -lpthread
 
+%.gz: %
+	gzip -9 < $< > $@
+
 clean:
-	if [ -f crashinfo ]; then rm crashinfo; fi
+	for file in $(TARGETS); do if [ -f $$file ]; then rm $$file; fi; done
 
 install: all
 	install -d -m 0755 "$(DESTDIR)/bin"
-	install -m 755 crashinfo "$(DESTDIR)/bin"
+	install -m 0755 crashinfo "$(DESTDIR)/bin"
+	install -d -m 0755 "$(DESTDIR)/share/man/man1"
+	install -m 0644 crashinfo.1.gz "$(DESTDIR)/share/man/man1"
