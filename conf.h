@@ -86,6 +86,8 @@ struct conf_s {
 	struct conf_output_s core;
 	/** Buffer for backwards seeks, unwinder argument. */
 	int core_buffer_size;
+	/** Core file if stdin is not used */
+	const char *core_path;
 	/** Notify with both info and core streams as arguments */
 	struct conf_multi_str_s *info_core_notify;
 	/** Logging configuration. */

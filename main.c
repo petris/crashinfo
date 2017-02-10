@@ -39,6 +39,7 @@
 #include <fcntl.h>
 #include <time.h>
 
+#include "util.h"
 #include "info.h"
 #include "conf.h"
 #include "proc.h"
@@ -52,7 +53,7 @@
 /** Exit the program */
 static void handler(int sig)
 {
-	_exit(2);
+	_exit(0x20 | exitcode);
 }
 
 /** Set core limit to zero and catch signals, which default action is
@@ -93,7 +94,7 @@ static int make_path(char *path)
 	char *p;
 
 	for (p = path; *p; p++) {
-		if (*p == '/') {
+		if (*p == '/' && p != path) {
 			*p = 0;
 			if (0 != mkdir(path, 0700) && errno != EEXIST) {
 				log_crit("Can't create directory '%s': %s",
@@ -247,6 +248,15 @@ static int open_output(const struct conf_output_s *c, struct run_output_s *r)
 	int counter = 0;
 	int pipefd[2], next_infd, next_outfd;
 
+	if (!c->output) {
+		fd = open_devnull();
+		if (fd < 0) {
+			log_crit("Can't open /dev/null");
+			goto err0;
+		}
+		goto opened;
+	}
+
 	if (c->output[0] != '/') {
 		log_crit("Output filename '%s' is not a full path", c->output);
 		goto err0;
@@ -266,14 +276,14 @@ restart:
 				path[j] = path[i--];
 				break;
 			case 'Q': // Counter mark
-				j -= seq_len;
+				j -= seq_len - 1;
 				if (j < --i) {
 					goto too_long;
 				}
 				snprintf(buf, sizeof buf, "%0*d", seq_len, counter);
 				memcpy(&path[j], buf, seq_len);
 				if (c->exists != CONF_EXISTS_SEQUENCE) {
-					log_info("Sequence wild card in '%s', but sequence mode is not used", c->output);
+					log_notice("Sequence wild card in '%s', but sequence mode is not used", c->output);
 				}
 				break;
 			case 'e': // executable filename
@@ -297,7 +307,7 @@ restart:
 				i--; j++;
 				break;
 			default:
-				log_info("Unknown wild card '@%c' in '%s'", path[i], c->output);
+				log_notice("Unknown wild card '@%c' in '%s'", path[i], c->output);
 				path[j--] = path[i--];
 				path[j] = path[i];
 				break;
@@ -350,7 +360,7 @@ reopen: fd = open(&path[j], flags, 0600);
 
 	r->output_filename = strdup(path + j);
 
-	r->filter = NULL;
+opened:	r->filter = NULL;
 	r->output_fd = fd;
 	r->output = NULL;
 
@@ -426,7 +436,7 @@ err1:	while (r->filter) {
 	close(next_outfd);
 	
 err0:	r->output = NULL;
-	r->output_fd = -1;
+	r->output_fd = open_devnull();
 
 	return -1;
 }
@@ -504,12 +514,12 @@ int main(int argc, char *argv[])
 		switch (c) {
 			case 'c':
 				if (parse_file(optarg)) {
-					return 1;
+					return exitcode;
 				}
 				break;
 			case 'o':
 				if (parse_line(optarg)) {
-					return 1;
+					return exitcode;
 				}
 				break;
 			case 'h':
@@ -517,12 +527,21 @@ int main(int argc, char *argv[])
 				return 0;
 			case '?':
 				fprintf(stderr, "Unknown option, use %s -h for help\n", argv[0]);
-				return 1;
+				return 0x1f;
 		}
 	}
 
 	log_dbg("Configuration before reading /proc/<PID>:");
 	log_conf();
+
+	// Open core if it's not read from stdin
+	if (conf.core_path) {
+		close(0);
+		rtn = open(conf.core_path, O_RDONLY);
+		if (rtn != 0) {
+			log_crit("Failed to open core '%s': %s", conf.core_path, strerror(errno));
+		}
+	}
 
 	// Create info dump thread (may be needed to obtain PID)
 	run.pid = -1;
@@ -597,25 +616,22 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	// Open outputs
-	if (conf.info.output) {
-		if (!open_output(&conf.info, &run.info)) {
-			run.info.output = fdopen(run.info.output_fd, "w");
-			if (run.info.output) {
-				setvbuf(run.info.output, NULL, _IOFBF, OUT_BUFSIZE);
-			} else {
-				log_crit("Failed to open output: %s", strerror(errno));
-				close_output(&conf.info, &run.info);
-			}
-		} else {
-			log_crit("Failed to open info output, ignoring");
-		}
+	// Open info outputs
+	open_output(&conf.info, &run.info);
+	if (run.info.output_fd < 0) {
+		goto err0;
 	}
+	run.info.output = fdopen(run.info.output_fd, "w");
+	if (!run.info.output) {
+		log_crit("Failed to open output: %s", strerror(errno));
+		goto err1;
+	}
+	setvbuf(run.info.output, NULL, _IOFBF, OUT_BUFSIZE);
 
-	if (conf.core.output) {
-		if (open_output(&conf.core, &run.core)) {
-			log_crit("Failed to open core output, ignoring");
-		}
+	// Open core output
+	open_output(&conf.core, &run.core);
+	if (run.core.output_fd < 0) {
+		goto err1;
 	}
 	
 	pthread_mutex_unlock(&dump_lock);
@@ -654,12 +670,16 @@ int main(int argc, char *argv[])
 
 	if (run.info.output_filename && run.core.output_filename) {
 		for (str = conf.info_core_notify; str; str = str->next) {
-			int nullfd = open("/dev/null", O_RDWR | O_CLOEXEC);
+			int nullfd = open_devnull();
 			spawn_proc(str->str, nullfd, nullfd,
 					run.info.output_filename,
 					run.core.output_filename);
+			close(nullfd);
 		}
 	}
 
-	return 0;
+	return exitcode;
+
+err1:	close_output(&conf.info, &run.info);
+err0:	return exitcode;
 }

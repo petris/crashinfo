@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# dump proc directory
+#
+
+if [ $# -ne 2 ]; then
+	echo "Usage: $0 <PID> <DIR>" >2
+	exit 1
+fi
+
+set -eu
+
+PID=$1
+mkdir -p "$2"
+export DIR="$(cd "$2" && pwd -P)"
+
+cd "/proc/$PID"
+find . -type d -exec sh -c 'mkdir -p $DIR/$1' sh {} \;
+find . -type f -exec sh -c 'dd if=$1 of=$DIR/$1 bs=64k count=1 2> /dev/null' sh {} \;
+find . -type l -exec sh -c 'cp -P $1 $DIR/$1' sh {} \;

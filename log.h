@@ -37,4 +37,6 @@ void logmsg(int level, const char *format, ...);
 #define log_dbg(...)  (void)0
 #endif
 
+extern int exitcode;
+
 #endif // LOG_H

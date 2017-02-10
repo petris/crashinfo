@@ -45,11 +45,11 @@ struct conf_s conf = {
 	.core_buffer_size = 4 * 1024 * 1024,
 	.log = {
 		.syslog = -1,
-		.info = LOG_INFO,
+		.info = LOG_NOTICE,
 #ifdef NDEBUG
-		.stderr = LOG_DEBUG,
-#else
 		.stderr = LOG_ERR,
+#else
+		.stderr = LOG_DEBUG,
 #endif
 	},
 };
@@ -310,6 +310,9 @@ static const struct parse_keywords_s keywords[] = {
 	{ "core_buffer_size",&conf.core_buffer_size, parse_int },
 
 	{ "info_core_notify",&conf.info_core_notify, parse_string_multi },
+
+	// Core file
+	{ "core", &conf.core_path, parse_string },
 
 	// Logging options
 	{ "log_info", &conf.log.info, parse_enum, parse_enum_loglevel },

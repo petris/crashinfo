@@ -25,27 +25,42 @@
 #include "log.h"
 #include "conf.h"
 
+int exitcode = 0;
+
 void logmsg(int priority, const char *format, ...)
 {
 	const char *prefix = "";
 	va_list ap;
 
 	switch (priority) {
-		case LOG_EMERG: prefix = "EMRG: ";
+		case LOG_EMERG:
+			prefix = "EMRG: ";
+			exitcode |= 0x10;
 			break;
-		case LOG_ALERT: prefix = "ALRT: ";
+		case LOG_ALERT:
+			prefix = "ALRT: ";
+			exitcode |= 0x8;
 			break;
-		case LOG_CRIT: prefix = "CRIT: ";
+		case LOG_CRIT:
+			prefix = "CRIT: ";
+			exitcode |= 0x4;
 			break;
-		case LOG_ERR: prefix = "ERR:  ";
+		case LOG_ERR:
+			prefix = "ERR:  ";
+			exitcode |= 0x2;
 			break;
-		case LOG_WARNING: prefix = "WARN: ";
+		case LOG_WARNING:
+			prefix = "WARN: ";
+			exitcode |= 0x1;
 			break;
-		case LOG_NOTICE: prefix = "NOTI: ";
+		case LOG_NOTICE:
+			prefix = "NOTI: ";
 			break;
-		case LOG_INFO: prefix = "INFO: ";
+		case LOG_INFO:
+			prefix = "INFO: ";
 			break;
-		case LOG_DEBUG: prefix = "DBG:  ";
+		case LOG_DEBUG:
+			prefix = "DBG:  ";
 			break;
 	}
 

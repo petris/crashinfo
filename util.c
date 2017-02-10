@@ -19,7 +19,11 @@
  *
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <ctype.h>
 
 #include "util.h"
@@ -37,3 +41,15 @@ int strlen_chomp(const char *value) {
 	return i;
 }
 
+/** Open /dev/null
+ *  @return Opened file descriptor or -1 on error */
+int open_devnull(void)
+{
+	static int fd = -1;
+
+	if (fd < 0) {
+		fd = open("/dev/null", O_RDWR);
+	}
+
+	return dup(fd);
+}

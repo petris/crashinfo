@@ -28,7 +28,7 @@ ifeq ($(CRASHINFO_WITH_LIBUNWIND), 1)
   override CFLAGS += -DCRASHINFO_WITH_LIBUNWIND $(shell pkg-config --cflags --libs libunwind libunwind-coredump | sed s/generic/$(CRASHINFO_WITH_LIBUNWIND_ARCH)/g)
 endif
 
-.PHONY: all clean install
+.PHONY: all clean install test
 
 all: $(TARGETS)
 
@@ -40,6 +40,9 @@ crashinfo: main.c log.c conf.c info.c proc.c unw.c util.c
 
 clean:
 	for file in $(TARGETS); do if [ -f $$file ]; then rm $$file; fi; done
+
+test: all
+	make -C t test
 
 install: all
 	install -d -m 0755 "$(DESTDIR)/bin"

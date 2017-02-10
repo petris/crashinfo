@@ -114,8 +114,8 @@ Keep the original file and terminate the stream do \fI/dev/null\fR instead.
 
 .TP
 \fBinfo_exists_seq, core_exists_seq\fR: \fI<INTEGER>\fR
-The maximum value used for the sequence number when \fBinfo_exists\fR or
-\fBcore_exists\fR are set to \fIsequence\fR.
+The maximum number of files created when \fBinfo_exists\fR or \fBcore_exists\fR
+are set to \fIsequence\fR.
 
 .TP
 \fBinfo_filter, core_filter\fR: \fI<STRING>+\fR
@@ -214,7 +214,12 @@ Note that \fIdebug\fR is not available unless the program was compiled with
 \fICRASHINFO_WITH_DEBUG\fR option.
 
 .SH RETURN VALUE
-0 on success.
+0 on success, otherwise bits in the return value indicate if a specific error
+level was encountered:
+.ce 1
+0x10 \- \fIemerg\fR, 0x8 \- \fIalert\fR, 0x4 \- \fIcrit\fR, 0x2 \- \fIerr\fR, 0x1 \- \fIwarning\fR
+bit 0x20 indicates the program has terminated after a reception of a signal,
+which would normally produce a core (e.g. SIGSEGV).
 
 .SH EXAMPLES
 

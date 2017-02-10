@@ -24,4 +24,6 @@
 
 int strlen_chomp(const char *value);
 
+int open_devnull(void);
+
 #endif // UTIL_H
