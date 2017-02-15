@@ -228,7 +228,9 @@ static void *info_dump_thread(void *arg)
 	int pid;
 
 	pid = unw_prepare(inputfd);
-	ACCESS_ONCE(run.pid) = pid < 0 ? -2 : pid;
+	if (run.pid == -1) {
+		ACCESS_ONCE(run.pid) = pid < 0 ? -2 : pid;
+	}
 
 	pthread_mutex_lock(&dump_lock);
 	pthread_mutex_unlock(&dump_lock);
@@ -273,6 +275,14 @@ restart:
 		} else switch (path[i]) {
 			case ESC:
 				path[j] = path[i--];
+				break;
+			case 'p': // PID
+				snprintf(buf, sizeof buf, "%d", run.pid);
+				j -= strlen(buf) - 1;
+				if (j < --i) {
+					goto too_long;
+				}
+				memcpy(&path[j], buf, strlen(buf));
 				break;
 			case 'Q': // Counter mark
 				j -= seq_len - 1;
@@ -501,6 +511,7 @@ int main(int argc, char *argv[])
 	int info_pipe[2] = { -1, -1 };
 	pthread_t tid;
 	int c, rtn;
+	char *end;
 
 	disable_core_generation();
 
@@ -509,7 +520,7 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &run.start_tp);
 	gmtime_r(&run.start_tp.tv_sec, &run.start_tm);
 
-	while (-1 != (c = getopt(argc, argv, "c:o:h"))) {
+	while (-1 != (c = getopt(argc, argv, "c:o:P:h"))) {
 		switch (c) {
 			case 'c':
 				if (parse_file(optarg)) {
@@ -521,8 +532,18 @@ int main(int argc, char *argv[])
 					return exitcode;
 				}
 				break;
+			case 'P':
+				if (run.pid != -1) {
+					log_info("PID specified multiple times");
+				}
+				run.pid = strtol(optarg, &end, 10);
+				if (*end != '\0' || run.pid <= 0) {
+					log_crit("Invalid PID specified on the command line: %s", optarg);
+					return exitcode;
+				}
+				break;
 			case 'h':
-				printf("Usage: %s [-h] [-c config_file] [-o option=value]\n", argv[0]);
+				printf("Usage: %s [-h] [-P PID] [-c config_file] [-o option=value]\n", argv[0]);
 				return 0;
 			case '?':
 				fprintf(stderr, "Unknown option, use %s -h for help\n", argv[0]);
@@ -543,7 +564,6 @@ int main(int argc, char *argv[])
 	}
 
 	// Create info dump thread (may be needed to obtain PID)
-	run.pid = -1;
 	pthread_mutex_lock(&dump_lock);
 	if (pipe2(info_pipe, O_CLOEXEC) || unblockfd(info_pipe[1])) {
 		log_crit("Can't create info pipe: %s", strerror(errno));
@@ -558,7 +578,7 @@ int main(int argc, char *argv[])
 			buf_write = 0;
 			if (buf_read <= 0) {
 				log_crit("Can't read the core: %s", strerror(err));
-			} else for (tries = buf_write = 0; buf_write < buf_read && tries < 5;) {
+			} else for (tries = buf_write = 0; tries < 50;) {
 				// We do not know how much data we must feed the unwinder to get
 				// the PID. We will feed it until one of the following occurs:
 				//  - We get the PID (victory)

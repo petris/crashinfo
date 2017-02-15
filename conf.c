@@ -55,7 +55,9 @@ struct conf_s conf = {
 };
 
 /** Running data. */
-struct run_s run;
+struct run_s run = {
+	.pid = -1,
+};
 
 struct parse_keywords_s;
 

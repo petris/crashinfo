@@ -25,6 +25,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -48,7 +49,8 @@ static struct {
  * @return PID or -1 on error */
 int unw_prepare(int core_fd)
 {
-	int pid;
+	int minpid = INT_MAX, minpid_fs = INT_MAX, pid, thread;
+	char buf[20];
 
 	core.as = unw_create_addr_space(&_UCD_accessors, 0);
 	if (!core.as) {
@@ -62,9 +64,22 @@ int unw_prepare(int core_fd)
 		return -1;
 	}
 
-	pid = _UCD_get_pid(core.ui);
-	log_dbg("Unwinder returned PID: %d", pid);
+	for (thread = 0; thread < _UCD_get_num_threads(core.ui); thread++) {
+		_UCD_select_thread(core.ui, thread);
+		pid = _UCD_get_pid(core.ui);
 
+		if (pid < minpid) {
+			minpid = pid;
+		}
+
+		snprintf(buf, sizeof buf, "/proc/%d", pid);
+		if (pid < minpid_fs && !access(buf, F_OK)) {
+			minpid_fs = pid;
+		}
+	}
+
+	pid = minpid_fs < INT_MAX ? minpid_fs : minpid;
+	log_dbg("Unwinder returned PID: %d", pid);
 	return pid;
 }
 

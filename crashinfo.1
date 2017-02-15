@@ -15,6 +15,7 @@ crashinfo \- Save information from a core and \fI/proc/<PID>\fR directory
 
 .SH SYNOPSIS
 .B crashinfo
+[\fB\-P\fR \fIPID\fR]
 [\fB\-c\fR \fIconfig_file\fR]
 [\fB\-o\fR \fIconfig_directive\fR]
 [\fB\-h\fR]
@@ -32,6 +33,15 @@ for more details.
 
 
 .SS Options
+.TP
+.BR \-P " " \fI PID\fR
+Specify the crashed process \fIPID\fR. This is used to lookup \fI/proc/<PID>\fR
+directory and if it's not specified, the program tries to guess it from the core
+file.
+
+Note that if the program is installed in \fI/proc/sys/kernel/core_pattern\fR,
+the PID of dumped process, as seen in the initial PID namespace, should be
+specified in this option (specifier \fI%P\fR).
 .TP
 .BR \-c " " \fI config_file\fR
 Read configuration from \fIconfig_file\fR. The option can be specified multiple
@@ -85,6 +95,8 @@ are supported by
 .BR strftime (3)
 function plus additional conversations, which expands as follows:
 .RS
+.IP \fI@P\fR
+PID of the process.
 .IP \fI@e\fR
 executable filename.
 .IP \fI@E\fR

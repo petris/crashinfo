@@ -3,7 +3,7 @@
 
 use strict;
 
-use Test::More tests => 42;
+use Test::More tests => 48;
 use File::Temp;
 use POSIX qw(strftime);
 use Util;
@@ -17,6 +17,7 @@ my %outputs = (
 	'@@@@@@e' => '@@@e',
 	'%Y@e@e' => strftime("%Ycrashcrash", gmtime),
 	'@E' => $exe_exclamation,
+	'=@p=' => "=$Util::pid=",
 );
 
 foreach my $stream (qw(info core)) {
