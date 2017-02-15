@@ -209,7 +209,6 @@ static void close_output(const struct conf_output_s *c, struct run_output_s *r)
 			assert(0);
 		}
 
-		tmp = iter->next;
 		free(iter);
 	}
 

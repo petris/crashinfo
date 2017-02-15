@@ -161,7 +161,7 @@ int parse_line(char *line);
 
 int parse_file(const char *path);
 
-#define foreach_safe(first, iter, tmp) for (((iter) = (first)) ? ((tmp) = (iter)->next) : 0 ; (iter); (iter) = (tmp), (tmp) = (iter)->next)
+#define foreach_safe(first, iter, tmp) for (((iter) = (first)) ? ((tmp) = (iter)->next) : 0 ; (iter) && ((tmp) = (iter)->next, 1); (iter) = (tmp))
 
 #ifndef NDEBUG
 void log_conf(void);
