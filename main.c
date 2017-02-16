@@ -225,7 +225,7 @@ static pthread_mutex_t dump_lock = PTHREAD_MUTEX_INITIALIZER;
 static void *info_dump_thread(void *arg)
 {
 	int inputfd = *(int *)arg;
-	int pid;
+	int pid, rtn;
 
 	pid = unw_prepare(inputfd);
 	if (run.pid == -1) {
@@ -235,7 +235,10 @@ static void *info_dump_thread(void *arg)
 	pthread_mutex_lock(&dump_lock);
 	pthread_mutex_unlock(&dump_lock);
 
-	return (void*)(long)info_dump();
+	rtn = info_dump();
+	close(inputfd);
+
+	return (void*)(long)rtn;
 }
 
 /** Open a file interpreting all wildcard characters and create filter chain */

@@ -43,6 +43,7 @@
 static struct {
 	unw_addr_space_t as;
 	struct UCD_info *ui;
+	int ok;
 } core;
 
 /** Prepare for dumping the core, doesn't require mappings
@@ -61,6 +62,7 @@ int unw_prepare(int core_fd)
 	core.ui = _UCD_create_fd(core_fd, "<pipe>", conf.core_buffer_size);
 	if (!core.ui) {
 		log_err("Failed to create UCD_info");
+		unw_destroy_addr_space(core.as);
 		return -1;
 	}
 
@@ -80,6 +82,7 @@ int unw_prepare(int core_fd)
 
 	pid = minpid_fs < INT_MAX ? minpid_fs : minpid;
 	log_dbg("Unwinder returned PID: %d", pid);
+	core.ok = 1;
 	return pid;
 }
 
@@ -87,6 +90,8 @@ int unw_dump(task_dumper_t task_dumper)
 {
 	unw_cursor_t c;
 	int rtn, thread, i;
+
+	if (!core.ok) return -1;
 
 	if (!conf.proc.maps) {
 		log_warn("Mapping information are not available\n");
@@ -101,7 +106,8 @@ int unw_dump(task_dumper_t task_dumper)
 	if (rtn) {
 		log_err("Failed to initialize the unwind cursor: %s",
 				unw_strerror(rtn));
-		return -1;
+		rtn = -1;
+		goto rtn0;
 	}
 
 	fputs("threads:\n", run.info.output);
@@ -203,7 +209,11 @@ int unw_dump(task_dumper_t task_dumper)
 		fputs(" ]\n", run.info.output);
 	}
 
-	return 0;
+	rtn = 0;
+
+rtn0:	_UCD_destroy(core.ui);
+	unw_destroy_addr_space(core.as);
+	return rtn;
 }
 
 #else // CRASHINFO_WITH_LIBUNWIND
