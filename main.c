@@ -523,6 +523,10 @@ int main(int argc, char *argv[])
 	clock_gettime(CLOCK_REALTIME, &run.start_tp);
 	gmtime_r(&run.start_tp.tv_sec, &run.start_tm);
 
+	// Ignore pipe signal, which arrives when a filter terminates before
+	// processing the whole stream
+	signal(SIGPIPE, SIG_IGN);
+
 	while (-1 != (c = getopt(argc, argv, "c:o:P:h"))) {
 		switch (c) {
 			case 'c':
