@@ -159,6 +159,8 @@ static int spawn_proc(const char *cmd, int infd, int outfd,
 		}
 		argv[i] = NULL;
 
+		signal(SIGPIPE, SIG_DFL);
+
 		execvp(argv[0], argv);
 		log_crit("Starting executable '%s' failed: %s", exe, strerror(errno));
 		exit(1);
@@ -203,8 +205,14 @@ static void close_output(const struct conf_output_s *c, struct run_output_s *r)
 						iter->filter, WEXITSTATUS(status));
 			}
 		} else if (WIFSIGNALED(status)) {
+			if (WTERMSIG(status) == SIGPIPE) {
+				log_warn("Filter '%s' was terminated by SIGPIPE."
+						" Stream may be truncated.",
+						iter->filter);
+			} else {
 				log_err("Filter '%s' was terminated by signal %d",
 						iter->filter, WTERMSIG(status));
+			}
 		} else {
 			assert(0);
 		}

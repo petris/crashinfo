@@ -234,7 +234,11 @@ int info_dump(void)
 	fprintf(run.info.output, "processing_time: %d.%06ld\n", (int)end_tp.tv_sec, end_tp.tv_nsec/1000);
 
 	if (0 != fflush(run.info.output) || ferror(run.info.output)) {
-		log_err("Failed flushing the info stream: %s", strerror(errno));
+		if (errno == EPIPE) {
+			log_warn("Info stream truncated");
+		} else {
+			log_err("Failed flushing the info stream: %s", strerror(errno));
+		}
 	}
 	if (0 != fsync(run.info.output_fd) && errno != EROFS && errno != EINVAL) {
 		log_err("Failed synchronizing the info stream: %s", strerror(errno));
