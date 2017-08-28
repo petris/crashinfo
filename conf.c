@@ -43,6 +43,7 @@ struct conf_s conf = {
 		.exists = CONF_EXISTS_KEEP,
 	},
 	.core_buffer_size = 4 * 1024 * 1024,
+	.backtrace_max_depth = 50,
 	.log = {
 		.syslog = -1,
 		.info = LOG_NOTICE,
@@ -301,6 +302,8 @@ static const struct parse_keywords_s keywords[] = {
 	{ "info_mkdir",  &conf.info.mkdir,  parse_enum, parse_enum_bool },
 	{ "info_notify", &conf.info.notify, parse_string_multi },
 	{ "info_output", &conf.info.output, parse_string },
+
+	{ "backtrace_max_depth", &conf.backtrace_max_depth, parse_int },
 	
 	// Core stream options
 	{ "core_exists",     &conf.core.exists, parse_enum, parse_enum_exists },

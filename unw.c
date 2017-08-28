@@ -113,7 +113,7 @@ int unw_dump(task_dumper_t task_dumper)
 	fputs("threads:\n", run.info.output);
 	for (thread = 0; thread < _UCD_get_num_threads(core.ui); thread++) {
 		const struct timeval *t;
-		int first;
+		int depth;
 
 		_UCD_select_thread(core.ui, thread);
 
@@ -149,8 +149,7 @@ int unw_dump(task_dumper_t task_dumper)
 		fputs(" ]\n", run.info.output);
 
 		fputs("    backtrace: [", run.info.output);
-		first = 1;
-		do {
+		for (depth = 0; depth < conf.backtrace_max_depth; depth++) {
 			unw_word_t off;
 			unw_proc_info_t pi;
 			char ptr[17], fname[256];
@@ -184,9 +183,7 @@ int unw_dump(task_dumper_t task_dumper)
 				signal = -1;
 			}
 
-			if (first) {
-				first = 0;
-			} else {
+			if (depth > 0) {
 				fputc(',', run.info.output);
 			}
 			fprintf(run.info.output, "\n      { a: %s", ptr);
@@ -205,7 +202,11 @@ int unw_dump(task_dumper_t task_dumper)
 				fputy(file, run.info.output);
 			}
 			fputs(" }", run.info.output);
-		} while (0 < (rtn = unw_step(&c)));
+
+			if (0 >= unw_step(&c)) {
+				break;
+			}
+		}
 		fputs(" ]\n", run.info.output);
 	}
 

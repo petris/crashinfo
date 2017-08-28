@@ -184,6 +184,9 @@ Sets the unwinder buffer size to this value. Unwinder buffer is used to resolve
 references, which point backward in the core. This is necessary when core is
 read from a source, which doesn't support seeking (e.g. a pipe).
 
+\fBbacktrace_max_depth\fR: \fI<INTEGER>\fR
+Maximum depth of a backtrace dumped to the info output.
+
 .PP
 Options related to \fI/proc\fR:
 .TP
@@ -243,7 +246,7 @@ core_filter = pxz
 # Limit core size to 8MB
 core_filter = head -c 8388608
 # Encrypt file using openssl
-core_filter = openssl smime -encrypt -aes256 -outform DER /etc/coreinfo/enc.pem
+core_filter = openssl smime -encrypt -aes256 -binary -outform DER /etc/coreinfo/enc.pem
 # Write output to /var/run/crash/YYYY-MM-DD-PROG.core.xz.p7
 core_output = /var/run/crash/%Y-%m-%d-@e.core.xz.p7
 .VE

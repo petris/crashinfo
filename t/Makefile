@@ -2,7 +2,7 @@ INPUTDIR := inputdir
 PROVE := prove
 
 test: $(INPUTDIR)/core $(INPUTDIR)/proc
-	$(PROVE) *.t
+	PERL5LIB=$(PERL5LIB):. $(PROVE) *.t
 
 $(INPUTDIR)/crash: crash.c
 	mkdir -p $(INPUTDIR)

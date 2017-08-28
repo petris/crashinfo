@@ -90,6 +90,8 @@ struct conf_s {
 	const char *core_path;
 	/** Notify with both info and core streams as arguments */
 	struct conf_multi_str_s *info_core_notify;
+	/** Maximum backtrace depth */
+	int backtrace_max_depth;
 	/** Logging configuration. */
 	struct {
 		/** Log level threshold for info output. */
