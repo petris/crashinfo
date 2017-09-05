@@ -33,7 +33,7 @@ endif
 all: $(TARGETS)
 
 crashinfo: main.c log.c conf.c info.c proc.c unw.c util.c
-	$(CC) $(CFLAGS) -Wall $^ -o $@ -lrt -lpthread
+	$(CC) $(CFLAGS) -Werror $^ -o $@ -lrt -lpthread
 
 %.gz: %
 	gzip -9 < $< > $@

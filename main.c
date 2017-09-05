@@ -63,6 +63,7 @@ static void disable_core_generation(void)
 	static char stack[MINSIGSTKSZ];
 	const stack_t ss = { .ss_size = MINSIGSTKSZ, .ss_sp = stack };
 	struct sigaction act = { .sa_handler = handler, .sa_flags = SA_ONSTACK };
+	const struct rlimit rzero = { 0 };
 	int sig[] = {
 			SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGSEGV,
 			SIGBUS, SIGSYS, SIGTRAP, SIGXCPU, SIGXFSZ,
@@ -71,7 +72,7 @@ static void disable_core_generation(void)
 
 	// Different kernel versions interprets this a different way,
 	// but in all cases it's inherited by our children.
-	setrlimit(RLIMIT_CORE, 0);
+	setrlimit(RLIMIT_CORE, &rzero);
 
 	// In a case kernel ignores RLIMIT_CORE, we must catch core generating
 	// signals. This doesn't protect programs we exec().
