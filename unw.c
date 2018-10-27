@@ -162,7 +162,7 @@ int unw_dump(task_dumper_t task_dumper)
 			if (!rtn) {
 				snprintf(ptr, sizeof ptr, "%016lx", (long)ip);
 			} else {
-				strncat(ptr, "UNKNOWN", sizeof ptr);
+				strncpy(ptr, "UNKNOWN", sizeof ptr);
 			}
 
 			rtn = unw_get_proc_info(&c, &pi);
