@@ -160,7 +160,7 @@ static int parse_enum(const struct parse_keywords_s *keyword, char *value)
 	}
 
 	log_crit("Invalid value '%s' for '%s', expected one of [%s]",
-			value, keyword, values);
+			value, keyword->keyword, values);
 	return -1;
 }
 

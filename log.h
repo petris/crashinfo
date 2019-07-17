@@ -24,7 +24,8 @@
 
 #include <syslog.h>
 
-void logmsg(int level, const char *format, ...);
+void logmsg(int level, const char *format, ...)
+		__attribute__ ((format (printf, 2, 3)));
 
 #define log_notice(...) logmsg(LOG_NOTICE,  __VA_ARGS__)
 #define log_info(...) logmsg(LOG_INFO,  __VA_ARGS__)
