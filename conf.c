@@ -20,6 +20,7 @@
  */
 
 #include <inttypes.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -72,6 +73,8 @@ struct parse_keywords_s {
 	int (*parser)(const struct parse_keywords_s *, char *);
 	/** Additional data for the parser function. */
 	const void *parser_arg;
+	/** True, if the value is multi value */
+	bool multi;
 };
 
 /** Structure used for mapping enum symbolic representation to a number. */
@@ -216,7 +219,6 @@ static int parse_string(const struct parse_keywords_s *keyword, char *value)
 	}
 
 	if (*str) {
-		log_info("'%s' specified multiple times", keyword->keyword);
 		free(*str);
 	}
 
@@ -239,10 +241,6 @@ static int parse_int(const struct parse_keywords_s *keyword, char *value)
 	int *num = keyword->storage;
 	long int_value;
 	char *end;
-
-	if (*num != INT_MIN) {
-		log_info("'%s' specified multiple times", keyword->keyword);
-	}
 
 	value = strtok(value, delim);
 	int_value = strtol(value, &end, 0);
@@ -298,9 +296,9 @@ static const struct parse_keywords_s keywords[] = {
 	// Info stream options (YAML)
 	{ "info_exists", &conf.info.exists, parse_enum, parse_enum_exists },
 	{ "info_exists_seq", &conf.info.exists_seq, parse_int },
-	{ "info_filter", &conf.info.filter, parse_string_multi },
+	{ "info_filter", &conf.info.filter, parse_string_multi, NULL, 1 },
 	{ "info_mkdir",  &conf.info.mkdir,  parse_enum, parse_enum_bool },
-	{ "info_notify", &conf.info.notify, parse_string_multi },
+	{ "info_notify", &conf.info.notify, parse_string_multi, NULL, 1 },
 	{ "info_output", &conf.info.output, parse_string },
 
 	{ "backtrace_max_depth", &conf.backtrace_max_depth, parse_int },
@@ -308,13 +306,13 @@ static const struct parse_keywords_s keywords[] = {
 	// Core stream options
 	{ "core_exists",     &conf.core.exists, parse_enum, parse_enum_exists },
 	{ "core_exists_seq", &conf.core.exists_seq, parse_int },
-	{ "core_filter",     &conf.core.filter, parse_string_multi },
+	{ "core_filter",     &conf.core.filter, parse_string_multi, NULL, 1 },
 	{ "core_mkdir",      &conf.core.mkdir,  parse_enum, parse_enum_bool },
-	{ "core_notify",     &conf.core.notify, parse_string_multi },
+	{ "core_notify",     &conf.core.notify, parse_string_multi, NULL, 1 },
 	{ "core_output",     &conf.core.output, parse_string },
 	{ "core_buffer_size",&conf.core_buffer_size, parse_int },
 
-	{ "info_core_notify",&conf.info_core_notify, parse_string_multi },
+	{ "info_core_notify",&conf.info_core_notify, parse_string_multi, NULL, 1 },
 
 	// Core file
 	{ "core", &conf.core_path, parse_string },
@@ -328,12 +326,14 @@ static const struct parse_keywords_s keywords[] = {
 	{ "proc_ignore", &conf.proc.ignore, parse_enum, parse_enum_bool },
 	{ "proc_path", &conf.proc.path, parse_string },
 	{ "proc_exe", &conf.proc.exe, parse_string },
-	{ "proc_maps", &conf.proc.maps, parse_mapping_multi },
+	{ "proc_maps", &conf.proc.maps, parse_mapping_multi, NULL, 1 },
 
 	// /proc dumping options
-	{ "proc_dump_root", &conf.proc_dump.root, parse_string_multi },
-	{ "proc_dump_task", &conf.proc_dump.task, parse_string_multi },
+	{ "proc_dump_root", &conf.proc_dump.root, parse_string_multi, NULL, 1 },
+	{ "proc_dump_task", &conf.proc_dump.task, parse_string_multi, NULL, 1 },
 };
+
+static unsigned keyword_seen[ARRAY_SIZE(keywords)];
 
 /** Parse an option line.
  *  @param[in] line - expected form: keyword = value
@@ -363,6 +363,11 @@ int parse_line(char *line)
 
 	for (i = 0; i < ARRAY_SIZE(keywords); i++) {
 		if (!strcmp(keywords[i].keyword, keyword)) {
+			if (keyword_seen[i]++ && !keywords[i].multi) {
+				log_info("'%s' specified multiple times "
+						"although it's not a multi "
+						"value option", keyword);
+			}
 			return keywords[i].parser(&keywords[i], value);
 		}
 	}
