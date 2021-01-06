@@ -26,4 +26,6 @@ FILE *open_proc(const char *name);
 
 int read_proc_info(void);
 
+int proc_pid_map(int nspid);
+
 #endif // PROC_H

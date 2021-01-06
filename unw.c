@@ -33,6 +33,7 @@
 
 #include "info.h"
 #include "conf.h"
+#include "proc.h"
 #include "log.h"
 #include "unw.h"
 
@@ -124,7 +125,7 @@ int unw_dump(task_dumper_t task_dumper)
 			continue;
 		}
 
-		task_dumper(_UCD_get_pid(core.ui));
+		task_dumper(proc_pid_map(_UCD_get_pid(core.ui)));
 
                 t = _UCD_get_utime(core.ui);
 		fprintf(run.info.output, "    user_time: %ld.%06ld\n", t->tv_sec, t->tv_usec);
